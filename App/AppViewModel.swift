@@ -9,7 +9,10 @@ final class AppViewModel: ObservableObject {
     @Published var authError: String? = nil
     @Published var selectedDraftForRewrite: Draft? = nil
     @Published var selectedTab: Int = 0
-    
+    @Published var needsEmailVerification: Bool = false
+    @Published var resendMessage: String? = nil
+    @Published var isResendingVerification: Bool = false
+
     private let sessionStore = SessionStore.shared
     private let authService = AuthService.shared
     private let appAttestService = AppAttestService.shared
@@ -18,7 +21,7 @@ final class AppViewModel: ObservableObject {
         currentUser = sessionStore.loadCachedUser()
         isAuthenticated = currentUser != nil
     }
-    
+
     func openDraftInRewrite(_ draft: Draft) {
         selectedDraftForRewrite = draft
         selectedTab = 0
@@ -55,6 +58,8 @@ final class AppViewModel: ObservableObject {
 
     func signIn(email: String, password: String) async {
         authError = nil
+        needsEmailVerification = false
+        resendMessage = nil
         isLoading = true
 
         do {
@@ -63,12 +68,41 @@ final class AppViewModel: ObservableObject {
             isAuthenticated = true
             sessionStore.saveUser(user)
         } catch {
-            authError = error.localizedDescription
+            let message = error.localizedDescription
+
+            authError = message
             currentUser = nil
             isAuthenticated = false
+
+            if message.lowercased().contains("not confirmed") ||
+                message.lowercased().contains("not verified") {
+                needsEmailVerification = true
+            }
         }
 
         isLoading = false
+    }
+
+    func resendVerification(email: String) async {
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedEmail.isEmpty else {
+            authError = "Enter your email first."
+            return
+        }
+
+        isResendingVerification = true
+        resendMessage = nil
+        authError = nil
+
+        do {
+            let message = try await authService.resendEmailVerification(email: trimmedEmail)
+            resendMessage = message
+        } catch {
+            authError = error.localizedDescription
+        }
+
+        isResendingVerification = false
     }
 
     func signUp(email: String, password: String) async -> String? {
@@ -92,6 +126,9 @@ final class AppViewModel: ObservableObject {
         currentUser = nil
         isAuthenticated = false
         authError = nil
+        needsEmailVerification = false
+        resendMessage = nil
+        isResendingVerification = false
         sessionStore.clear()
         isLoading = false
     }

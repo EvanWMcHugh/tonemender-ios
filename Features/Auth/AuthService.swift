@@ -4,6 +4,10 @@ struct PasswordResetRequest: Encodable {
     let email: String
 }
 
+struct ResendEmailVerificationRequest: Encodable {
+    let email: String
+}
+
 struct BasicAuthMessageResponse: Decodable {
     let success: Bool?
     let message: String?
@@ -59,6 +63,21 @@ final class AuthService {
             body: request,
             as: AuthSuccessResponse.self
         )
+    }
+
+    func resendEmailVerification(email: String) async throws -> String {
+        let request = ResendEmailVerificationRequest(
+            email: email.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+
+        let response = try await apiClient.protectedPost(
+            "/api/auth/resend-email-verification",
+            body: request,
+            as: BasicAuthMessageResponse.self
+        )
+
+        return response.message
+            ?? "If that account exists and still needs verification, we sent a confirmation email."
     }
 
     func requestPasswordReset(email: String) async throws -> String {

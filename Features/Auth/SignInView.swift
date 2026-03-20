@@ -55,6 +55,51 @@ struct SignInView: View {
                             .multilineTextAlignment(.center)
                     }
 
+                    if appViewModel.needsEmailVerification {
+                        VStack(spacing: 10) {
+                            Text("Your account may still need email verification.")
+                                .font(.footnote)
+                                .fontWeight(.semibold)
+
+                            Text("Request a new verification email and try signing in again.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+
+                            Button {
+                                Task {
+                                    await appViewModel.resendVerification(
+                                        email: email.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    )
+                                }
+                            } label: {
+                                if appViewModel.isResendingVerification {
+                                    ProgressView()
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 6)
+                                } else {
+                                    Text("Resend verification email")
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 6)
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(
+                                appViewModel.isLoading ||
+                                appViewModel.isResendingVerification ||
+                                email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            )
+
+                            if let resendMessage = appViewModel.resendMessage {
+                                Text(resendMessage)
+                                    .font(.footnote)
+                                    .foregroundStyle(.green)
+                                    .multilineTextAlignment(.center)
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
+
                     Button {
                         Task {
                             await appViewModel.signIn(
@@ -77,6 +122,7 @@ struct SignInView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(
                         appViewModel.isLoading ||
+                        appViewModel.isResendingVerification ||
                         email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
                         password.isEmpty
                     )
