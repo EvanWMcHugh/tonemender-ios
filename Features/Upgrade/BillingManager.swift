@@ -6,7 +6,6 @@ import Combine
 final class BillingManager: ObservableObject {
     static let shared = BillingManager()
 
-    // Change these only if your final App Store Connect product IDs differ.
     static let monthlyProductId = "com.tonemender.pro.monthly"
     static let yearlyProductId = "com.tonemender.pro.yearly"
 
@@ -18,16 +17,24 @@ final class BillingManager: ObservableObject {
     @Published var purchaseSuccessMessage: String?
     @Published var hasActiveSubscription = false
 
+    private let apiClient: APIClient
     private var productsById: [String: Product] = [:]
     private var transactionListenerTask: Task<Void, Never>?
 
-    private init() {
-        transactionListenerTask = observeTransactionUpdates()
+    private init(apiClient: APIClient) {
+        self.apiClient = apiClient
+        self.transactionListenerTask = observeTransactionUpdates()
+    }
+
+    private convenience init() {
+        self.init(apiClient: APIClient.shared)
     }
 
     deinit {
         transactionListenerTask?.cancel()
     }
+
+    // MARK: - Public
 
     func loadProducts() async {
         isLoadingProducts = true
@@ -37,36 +44,11 @@ final class BillingManager: ObservableObject {
         defer { isLoadingProducts = false }
 
         do {
-            let products = try await Product.products(for: [
-                Self.monthlyProductId,
-                Self.yearlyProductId
-            ])
-
+            let products = try await Product.products(for: Self.managedProductIds)
             productsById = Dictionary(uniqueKeysWithValues: products.map { ($0.id, $0) })
 
-            if let monthlyProduct = productsById[Self.monthlyProductId] {
-                monthlyPlan = BillingPlan(
-                    id: monthlyProduct.id,
-                    planType: .monthly,
-                    productId: monthlyProduct.id,
-                    displayName: monthlyProduct.displayName,
-                    displayPrice: monthlyProduct.displayPrice
-                )
-            } else {
-                monthlyPlan = nil
-            }
-
-            if let yearlyProduct = productsById[Self.yearlyProductId] {
-                yearlyPlan = BillingPlan(
-                    id: yearlyProduct.id,
-                    planType: .yearly,
-                    productId: yearlyProduct.id,
-                    displayName: yearlyProduct.displayName,
-                    displayPrice: yearlyProduct.displayPrice
-                )
-            } else {
-                yearlyPlan = nil
-            }
+            monthlyPlan = makePlan(for: .monthly)
+            yearlyPlan = makePlan(for: .yearly)
 
             if monthlyPlan == nil && yearlyPlan == nil {
                 errorMessage = "No subscription products were found."
@@ -89,16 +71,7 @@ final class BillingManager: ObservableObject {
 
         defer { isPurchasing = false }
 
-        let productId: String = {
-            switch planType {
-            case .monthly:
-                return Self.monthlyProductId
-            case .yearly:
-                return Self.yearlyProductId
-            }
-        }()
-
-        guard let product = productsById[productId] else {
+        guard let product = product(for: planType) else {
             errorMessage = "Subscription product is not loaded."
             return false
         }
@@ -175,6 +148,37 @@ final class BillingManager: ObservableObject {
         hasActiveSubscription = active
     }
 
+    // MARK: - Private
+
+    private static var managedProductIds: [String] {
+        [monthlyProductId, yearlyProductId]
+    }
+
+    private func productId(for planType: BillingPlanType) -> String {
+        switch planType {
+        case .monthly:
+            return Self.monthlyProductId
+        case .yearly:
+            return Self.yearlyProductId
+        }
+    }
+
+    private func product(for planType: BillingPlanType) -> Product? {
+        productsById[productId(for: planType)]
+    }
+
+    private func makePlan(for planType: BillingPlanType) -> BillingPlan? {
+        guard let product = product(for: planType) else { return nil }
+
+        return BillingPlan(
+            id: product.id,
+            planType: planType,
+            productId: product.id,
+            displayName: product.displayName,
+            displayPrice: product.displayPrice
+        )
+    }
+
     private func syncCurrentEntitlementsToBackend() async throws {
         var sawManagedEntitlement = false
 
@@ -213,8 +217,8 @@ final class BillingManager: ObservableObject {
             }
         }
 
-        let response = try await APIClient.shared.post(
-            "/api/ios/billing/sync",
+        let response = try await apiClient.post(
+            "/api/billing/apple/sync",
             body: SyncRequest(signedTransaction: signedTransaction),
             as: SyncResponse.self
         )
@@ -258,7 +262,7 @@ final class BillingManager: ObservableObject {
     }
 
     private static func isManagedProductId(_ productId: String) -> Bool {
-        productId == monthlyProductId || productId == yearlyProductId
+        managedProductIds.contains(productId)
     }
 
     private func isExpiredOrRevoked(_ transaction: Transaction) -> Bool {
@@ -289,4 +293,3 @@ final class BillingManager: ObservableObject {
         }
     }
 }
-

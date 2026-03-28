@@ -1,6 +1,7 @@
 import Foundation
 
 struct BasicMessageResponse: Decodable {
+    let ok: Bool?
     let message: String?
     let error: String?
 }
@@ -18,13 +19,19 @@ struct DeleteAccountRequest: Encodable {
 final class AccountService {
     static let shared = AccountService()
 
-    private let apiClient = APIClient.shared
+    private let apiClient: APIClient
 
-    private init() {}
+    private init(apiClient: APIClient) {
+        self.apiClient = apiClient
+    }
+
+    private convenience init() {
+        self.init(apiClient: APIClient.shared)
+    }
 
     func changeEmail(newEmail: String, currentPassword: String) async throws -> String {
         let body = ChangeEmailRequest(
-            newEmail: newEmail,
+            newEmail: normalize(newEmail),
             currentPassword: currentPassword
         )
 
@@ -40,10 +47,25 @@ final class AccountService {
     func deleteAccount(password: String) async throws {
         let body = DeleteAccountRequest(password: password)
 
-        _ = try await apiClient.protectedPost(
+        let response = try await apiClient.protectedPost(
             "/api/user/delete-account",
             body: body,
             as: BasicMessageResponse.self
         )
+
+        if response.ok == false {
+            throw APIError.server(
+                statusCode: 500,
+                message: response.error ?? "Failed to delete account."
+            )
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func normalize(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
     }
 }

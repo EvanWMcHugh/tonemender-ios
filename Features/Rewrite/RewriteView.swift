@@ -6,7 +6,7 @@ struct RewriteView: View {
     @StateObject private var viewModel = RewriteViewModel()
 
     @State private var isSavingDraft = false
-    @State private var draftSaveMessage: String? = nil
+    @State private var draftSaveMessage: String?
 
     @State private var shareItems: [Any] = []
     @State private var showShareSheet = false
@@ -29,6 +29,10 @@ struct RewriteView: View {
 
     private var freeLimitReached: Bool {
         viewModel.freeLimitReached
+    }
+
+    private var trimmedMessage: String {
+        viewModel.message.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var body: some View {
@@ -61,19 +65,25 @@ struct RewriteView: View {
             }
             .navigationTitle("Rewrite")
             .task {
-                viewModel.configureCurrentUser(isPro: appViewModel.currentUser?.isPro == true)
-                await viewModel.loadUsage()
+                await configureAndLoad()
+            }
+            .onChange(of: appViewModel.currentUser?.isPro) { newValue in
+                viewModel.configureCurrentUser(isPro: newValue == true)
             }
             .onChange(of: appViewModel.selectedDraftForRewrite?.id) { _ in
-                if let draft = appViewModel.selectedDraftForRewrite {
-                    viewModel.loadDraft(draft)
-                    appViewModel.selectedDraftForRewrite = nil
-                }
+                guard let draft = appViewModel.selectedDraftForRewrite else { return }
+                viewModel.loadDraft(draft)
+                appViewModel.clearSelectedDraft()
             }
             .sheet(isPresented: $showShareSheet) {
                 ActivityViewController(activityItems: shareItems)
             }
         }
+    }
+
+    private func configureAndLoad() async {
+        viewModel.configureCurrentUser(isPro: appViewModel.currentUser?.isPro == true)
+        await viewModel.loadUsage()
     }
 
     private var headerSection: some View {
@@ -163,6 +173,7 @@ struct RewriteView: View {
 
             HStack {
                 Spacer()
+
                 Text(viewModel.characterCountText)
                     .font(.footnote)
                     .foregroundStyle(viewModel.message.count > 2000 ? .red : .secondary)
@@ -254,16 +265,16 @@ struct RewriteView: View {
 
     @ViewBuilder
     private var feedbackSection: some View {
-        if let errorMessage = viewModel.errorMessage {
+        if let errorMessage = viewModel.errorMessage, !errorMessage.isEmpty {
             Text(errorMessage)
                 .font(.footnote)
                 .foregroundStyle(.red)
                 .multilineTextAlignment(.leading)
-        } else if let copied = viewModel.copiedMessage {
+        } else if let copied = viewModel.copiedMessage, !copied.isEmpty {
             Text("\(copied) copied")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-        } else if let draftSaveMessage {
+        } else if let draftSaveMessage, !draftSaveMessage.isEmpty {
             Text(draftSaveMessage)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -272,7 +283,8 @@ struct RewriteView: View {
 
     @ViewBuilder
     private var resultSection: some View {
-        if let result = viewModel.result, let displayed = viewModel.displayedRewrite() {
+        if let result = viewModel.result,
+           let displayed = viewModel.displayedRewrite() {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Rewritten message")
                     .font(.headline)
@@ -314,12 +326,12 @@ struct RewriteView: View {
                 }
 
                 beforeAfterSection(
-                    before: viewModel.message.trimmingCharacters(in: .whitespacesAndNewlines),
+                    before: trimmedMessage,
                     after: displayed
                 )
 
                 shareSection(
-                    before: viewModel.message.trimmingCharacters(in: .whitespacesAndNewlines),
+                    before: trimmedMessage,
                     after: displayed
                 )
 
@@ -410,11 +422,13 @@ struct RewriteView: View {
             if isProUser {
                 Text("Pro account • Unlimited rewrites")
                     .foregroundStyle(.secondary)
+
                 Text("Total rewrites: \(viewModel.totalRewrites)")
                     .foregroundStyle(.secondary)
             } else {
                 Text("Free rewrites today: \(rewritesToday)/\(freeLimit)")
                     .foregroundStyle(.secondary)
+
                 Text("Total rewrites: \(viewModel.totalRewrites)")
                     .foregroundStyle(.secondary)
 
@@ -428,11 +442,12 @@ struct RewriteView: View {
     }
 
     private func saveDraft() async {
-        let original = viewModel.message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let original = trimmedMessage
+
         guard !original.isEmpty else { return }
 
         guard let displayed = viewModel.displayedRewrite() else {
-            draftSaveMessage = "Nothing to save yet"
+            draftSaveMessage = "Nothing to save yet."
             return
         }
 
@@ -469,7 +484,7 @@ struct RewriteView: View {
                 )
             }
 
-            draftSaveMessage = "Draft saved"
+            draftSaveMessage = "Draft saved."
         } catch {
             draftSaveMessage = error.localizedDescription
         }
@@ -493,11 +508,11 @@ struct RewriteView: View {
 
         if let image = renderer.uiImage {
             shareItems = [image]
-            showShareSheet = true
         } else {
             shareItems = [formattedBeforeAfterText(before: before, after: after)]
-            showShareSheet = true
         }
+
+        showShareSheet = true
     }
 
     private func formattedBeforeAfterText(before: String, after: String) -> String {

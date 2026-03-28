@@ -3,18 +3,33 @@ import Combine
 
 @MainActor
 final class AccountViewModel: ObservableObject {
-    @Published var rewritesToday: Int = 0
-    @Published var totalRewrites: Int = 0
-    @Published var isLoading: Bool = false
-    @Published var errorMessage: String? = nil
-    @Published var successMessage: String? = nil
+    @Published var rewritesToday = 0
+    @Published var totalRewrites = 0
+    @Published var isLoading = false
+    @Published var errorMessage: String?
+    @Published var successMessage: String?
 
-    @Published var newEmail: String = ""
-    @Published var currentPasswordForEmailChange: String = ""
-    @Published var currentPasswordForDelete: String = ""
+    @Published var newEmail = ""
+    @Published var currentPasswordForEmailChange = ""
+    @Published var currentPasswordForDelete = ""
 
-    private let usageService = UsageService.shared
-    private let accountService = AccountService.shared
+    private let usageService: UsageService
+    private let accountService: AccountService
+
+    init(
+        usageService: UsageService,
+        accountService: AccountService
+    ) {
+        self.usageService = usageService
+        self.accountService = accountService
+    }
+
+    convenience init() {
+        self.init(
+            usageService: .shared,
+            accountService: .shared
+        )
+    }
 
     func loadUsage() async {
         isLoading = true
@@ -32,9 +47,9 @@ final class AccountViewModel: ObservableObject {
     }
 
     func submitEmailChange() async -> Bool {
-        let trimmedEmail = newEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedEmail = normalizeEmail(newEmail)
 
-        guard !trimmedEmail.isEmpty else {
+        guard !normalizedEmail.isEmpty else {
             errorMessage = "New email is required."
             return false
         }
@@ -52,10 +67,12 @@ final class AccountViewModel: ObservableObject {
 
         do {
             let message = try await accountService.changeEmail(
-                newEmail: trimmedEmail,
+                newEmail: normalizedEmail,
                 currentPassword: currentPasswordForEmailChange
             )
+
             successMessage = message
+            newEmail = ""
             currentPasswordForEmailChange = ""
             return true
         } catch {
@@ -66,9 +83,15 @@ final class AccountViewModel: ObservableObject {
 
     func deleteAccount() async throws {
         guard !currentPasswordForDelete.isEmpty else {
-            throw NSError(domain: "", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "Current password is required."
-            ])
+            let error = NSError(
+                domain: "ToneMenderAccount",
+                code: 1,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Current password is required."
+                ]
+            )
+            errorMessage = error.localizedDescription
+            throw error
         }
 
         isLoading = true
@@ -84,5 +107,11 @@ final class AccountViewModel: ObservableObject {
             errorMessage = error.localizedDescription
             throw error
         }
+    }
+
+    private func normalizeEmail(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
     }
 }

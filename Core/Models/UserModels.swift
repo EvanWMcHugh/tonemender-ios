@@ -9,8 +9,12 @@ struct TMUser: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case id
         case email
-        case isPro = "isPro"
-        case planType = "planType"
+        case isPro = "is_pro"
+        case planType = "plan_type"
+    }
+
+    var effectivePlanType: String {
+        planType ?? (isPro ? "pro" : "free")
     }
 }
 

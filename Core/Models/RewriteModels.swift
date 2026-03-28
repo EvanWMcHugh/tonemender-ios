@@ -64,5 +64,27 @@ struct RewriteResponse: Codable {
         case freeLimit = "free_limit"
         case rewritesToday = "rewrites_today"
     }
-}
 
+    // MARK: - Helpers
+
+    var safeSoft: String {
+        normalize(soft)
+    }
+
+    var safeCalm: String {
+        normalize(calm)
+    }
+
+    var safeClear: String {
+        normalize(clear)
+    }
+
+    var effectivePlanType: String {
+        planType ?? (isPro ? "pro" : "free")
+    }
+
+    private func normalize(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? value : trimmed
+    }
+}

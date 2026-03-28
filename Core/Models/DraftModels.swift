@@ -20,13 +20,40 @@ struct Draft: Codable, Identifiable {
     }
 
     var createdAtDate: Date? {
-        ISO8601DateFormatter().date(from: createdAt)
+        Self.isoFormatter.date(from: createdAt)
     }
+
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
 }
+
+// MARK: - Responses
 
 struct DraftListResponse: Codable {
     let drafts: [Draft]
 }
+
+struct SaveDraftResponse: Codable {
+    let success: Bool?
+    let draft: Draft?
+    let error: String?
+}
+
+struct DeleteDraftResponse: Codable {
+    let success: Bool?
+    let deletedId: String?
+    let error: String?
+}
+
+struct DeleteAllDraftsResponse: Codable {
+    let success: Bool?
+    let error: String?
+}
+
+// MARK: - Requests
 
 struct SaveDraftRequest: Codable {
     let original: String
@@ -44,24 +71,6 @@ struct SaveDraftRequest: Codable {
     }
 }
 
-struct SaveDraftResponse: Codable {
-    let success: Bool?
-    let draft: Draft?
-    let error: String?
-}
-
 struct DeleteDraftRequest: Codable {
     let draftId: String
 }
-
-struct DeleteDraftResponse: Codable {
-    let success: Bool?
-    let deletedId: String?
-    let error: String?
-}
-
-struct DeleteAllDraftsResponse: Codable {
-    let success: Bool?
-    let error: String?
-}
-

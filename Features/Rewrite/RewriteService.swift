@@ -4,17 +4,25 @@ import Foundation
 final class RewriteService {
     static let shared = RewriteService()
 
-    private let apiClient = APIClient.shared
+    private let apiClient: APIClient
 
-    private init() {}
+    private init(apiClient: APIClient) {
+        self.apiClient = apiClient
+    }
+
+    private convenience init() {
+        self.init(apiClient: APIClient.shared)
+    }
 
     func rewrite(
         message: String,
         recipient: RewriteRecipient,
         tone: RewriteTone
     ) async throws -> RewriteResponse {
+        let trimmedMessage = normalize(message)
+
         let request = RewriteRequest(
-            message: message.trimmingCharacters(in: .whitespacesAndNewlines),
+            message: trimmedMessage,
             recipient: recipient,
             tone: tone
         )
@@ -25,5 +33,8 @@ final class RewriteService {
             as: RewriteResponse.self
         )
     }
-}
 
+    private func normalize(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}

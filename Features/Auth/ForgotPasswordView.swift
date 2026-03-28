@@ -3,12 +3,20 @@ import SwiftUI
 struct ForgotPasswordView: View {
     @Environment(\.dismiss) private var dismiss
 
-    @State private var email: String = ""
+    @State private var email = ""
     @State private var isLoading = false
-    @State private var errorMessage: String? = nil
-    @State private var successMessage: String? = nil
+    @State private var errorMessage: String?
+    @State private var successMessage: String?
 
-    var prefilledEmail: String = ""
+    let prefilledEmail: String
+
+    private var normalizedEmail: String {
+        email.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canSubmit: Bool {
+        !normalizedEmail.isEmpty && !isLoading
+    }
 
     var body: some View {
         NavigationStack {
@@ -24,7 +32,7 @@ struct ForgotPasswordView: View {
                         .autocorrectionDisabled()
                 }
 
-                if let errorMessage {
+                if let errorMessage, !errorMessage.isEmpty {
                     Section {
                         Text(errorMessage)
                             .font(.footnote)
@@ -32,7 +40,7 @@ struct ForgotPasswordView: View {
                     }
                 }
 
-                if let successMessage {
+                if let successMessage, !successMessage.isEmpty {
                     Section {
                         Text(successMessage)
                             .font(.footnote)
@@ -54,7 +62,7 @@ struct ForgotPasswordView: View {
                                 .frame(maxWidth: .infinity)
                         }
                     }
-                    .disabled(isLoading || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!canSubmit)
                 }
             }
             .navigationTitle("Forgot Password")
@@ -68,16 +76,14 @@ struct ForgotPasswordView: View {
             }
             .onAppear {
                 if email.isEmpty {
-                    email = prefilledEmail
+                    email = prefilledEmail.trimmingCharacters(in: .whitespacesAndNewlines)
                 }
             }
         }
     }
 
     private func submit() async {
-        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmed.isEmpty else {
+        guard !normalizedEmail.isEmpty else {
             errorMessage = "Email is required."
             return
         }
@@ -89,7 +95,7 @@ struct ForgotPasswordView: View {
         defer { isLoading = false }
 
         do {
-            let message = try await AuthService.shared.requestPasswordReset(email: trimmed)
+            let message = try await AuthService.shared.requestPasswordReset(email: normalizedEmail)
             successMessage = message
         } catch {
             errorMessage = error.localizedDescription

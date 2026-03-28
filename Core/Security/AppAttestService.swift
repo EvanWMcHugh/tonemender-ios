@@ -30,24 +30,29 @@ final class AppAttestService {
     static let shared = AppAttestService()
 
     private let service = DCAppAttestService.shared
-    private let apiClient = APIClient.shared
+    private let apiClient: APIClient
 
-    private let keyIdDefaultsKey = "tm_app_attest_key_id"
-    private let attestedDefaultsKey = "tm_app_attest_attested"
+    private let keyIdKey = "tm_app_attest_key_id"
+    private let attestedKey = "tm_app_attest_attested"
 
-    private init() {}
+    private init(apiClient: APIClient) {
+        self.apiClient = apiClient
+    }
+
+    private convenience init() {
+        self.init(apiClient: APIClient.shared)
+    }
 
     var isSupported: Bool {
         service.isSupported
     }
 
-    // MARK: - Public API expected by APIClient
+    // MARK: - Public API
 
     func ensureKeyId() async throws -> String {
         guard service.isSupported else {
             throw AppAttestError.notSupported
         }
-
         return try await getOrCreateKeyId()
     }
 
@@ -56,45 +61,41 @@ final class AppAttestService {
             throw AppAttestError.notSupported
         }
 
-        let keyId = try await getOrCreateKeyId()
-
-        if UserDefaults.standard.bool(forKey: attestedDefaultsKey) {
+        if UserDefaults.standard.bool(forKey: attestedKey) {
             return
         }
 
+        let keyId = try await getOrCreateKeyId()
+
         let challengeResponse = try await apiClient.post(
             "/api/ios/app-attest/challenge",
-            headers: [
-                "x-client-platform": "ios"
-            ],
+            headers: ["x-client-platform": "ios"],
             as: AppAttestChallengeResponse.self
         )
 
-        let challengeData = try decodeBase64Challenge(challengeResponse.challenge)
-        let clientDataHash = sha256Data(challengeData)
+        let challengeData = try decodeBase64(challengeResponse.challenge)
+        let clientDataHash = sha256(challengeData)
 
-        let attestationData = try await attestKey(
+        let attestation = try await attestKey(
             keyId: keyId,
             clientDataHash: clientDataHash
         )
 
         let request = AppAttestAttestationRequest(
             keyId: keyId,
-            attestation: attestationData.base64EncodedString(),
+            attestation: attestation.base64EncodedString(),
             challenge: challengeResponse.challenge
         )
 
         let response = try await apiClient.post(
             "/api/ios/app-attest/attest",
             body: request,
-            headers: [
-                "x-client-platform": "ios"
-            ],
+            headers: ["x-client-platform": "ios"],
             as: AppAttestSuccessResponse.self
         )
 
-        if response.ok {
-            UserDefaults.standard.set(true, forKey: attestedDefaultsKey)
+        if response.ok == true {
+            UserDefaults.standard.set(true, forKey: attestedKey)
         }
     }
 
@@ -109,47 +110,44 @@ final class AppAttestService {
             throw AppAttestError.notSupported
         }
 
-        let challengeData = try decodeBase64Challenge(challenge)
+        let challengeData = try decodeBase64(challenge)
 
-        let normalizedMethod = method.uppercased()
-        let normalizedPath = normalizePath(path)
-
-        let clientDataHashInput = makeAssertionPayload(
+        let payload = makeAssertionPayload(
             challenge: challengeData,
-            method: normalizedMethod,
-            path: normalizedPath,
-            requestBody: requestBody
+            method: method.uppercased(),
+            path: normalizePath(path),
+            body: requestBody
         )
 
-        let clientDataHash = sha256Data(clientDataHashInput)
+        let clientDataHash = sha256(payload)
 
-        let assertionData = try await generateAssertionData(
+        let assertion = try await generateAssertionData(
             keyId: keyId,
             clientDataHash: clientDataHash
         )
 
-        return assertionData.base64EncodedString()
+        return assertion.base64EncodedString()
     }
 
     func resetForDebug() {
-        UserDefaults.standard.removeObject(forKey: keyIdDefaultsKey)
-        UserDefaults.standard.removeObject(forKey: attestedDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: keyIdKey)
+        UserDefaults.standard.removeObject(forKey: attestedKey)
     }
 
-    // MARK: - Internal helpers
+    // MARK: - Private
 
     private func getOrCreateKeyId() async throws -> String {
-        if let existing = UserDefaults.standard.string(forKey: keyIdDefaultsKey),
+        if let existing = UserDefaults.standard.string(forKey: keyIdKey),
            !existing.isEmpty {
             return existing
         }
 
         let keyId = try await generateKey()
-        UserDefaults.standard.set(keyId, forKey: keyIdDefaultsKey)
+        UserDefaults.standard.set(keyId, forKey: keyIdKey)
         return keyId
     }
 
-    private func decodeBase64Challenge(_ base64: String) throws -> Data {
+    private func decodeBase64(_ base64: String) throws -> Data {
         guard let data = Data(base64Encoded: base64) else {
             throw AppAttestError.invalidChallenge
         }
@@ -164,7 +162,7 @@ final class AppAttestService {
         challenge: Data,
         method: String,
         path: String,
-        requestBody: Data
+        body: Data
     ) -> Data {
         var data = Data()
 
@@ -181,14 +179,13 @@ final class AppAttestService {
         }
 
         data.append(0)
-        data.append(requestBody)
+        data.append(body)
 
         return data
     }
 
-    private func sha256Data(_ data: Data) -> Data {
-        let digest = SHA256.hash(data: data)
-        return Data(digest)
+    private func sha256(_ data: Data) -> Data {
+        Data(SHA256.hash(data: data))
     }
 
     private func generateKey() async throws -> String {
@@ -214,18 +211,18 @@ final class AppAttestService {
         clientDataHash: Data
     ) async throws -> Data {
         try await withCheckedThrowingContinuation { continuation in
-            service.attestKey(keyId, clientDataHash: clientDataHash) { attestation, error in
+            service.attestKey(keyId, clientDataHash: clientDataHash) { data, error in
                 if let error {
                     continuation.resume(throwing: error)
                     return
                 }
 
-                guard let attestation else {
+                guard let data else {
                     continuation.resume(throwing: AppAttestError.invalidAttestationData)
                     return
                 }
 
-                continuation.resume(returning: attestation)
+                continuation.resume(returning: data)
             }
         }
     }
@@ -235,18 +232,18 @@ final class AppAttestService {
         clientDataHash: Data
     ) async throws -> Data {
         try await withCheckedThrowingContinuation { continuation in
-            service.generateAssertion(keyId, clientDataHash: clientDataHash) { assertion, error in
+            service.generateAssertion(keyId, clientDataHash: clientDataHash) { data, error in
                 if let error {
                     continuation.resume(throwing: error)
                     return
                 }
 
-                guard let assertion else {
+                guard let data else {
                     continuation.resume(throwing: AppAttestError.invalidAssertionData)
                     return
                 }
 
-                continuation.resume(returning: assertion)
+                continuation.resume(returning: data)
             }
         }
     }

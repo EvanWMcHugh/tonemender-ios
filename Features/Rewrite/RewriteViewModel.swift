@@ -12,26 +12,46 @@ final class RewriteViewModel: ObservableObject {
     @Published var selectedRecipient: RewriteRecipient = .partner
     @Published var selectedTone: RewriteTone = .soft
 
-    @Published var result: RewriteResponse? = nil
-    @Published var isLoading: Bool = false
-    @Published var isLoadingUsage: Bool = false
-    @Published var errorMessage: String? = nil
-    @Published var copiedMessage: String? = nil
+    @Published var result: RewriteResponse?
+    @Published var isLoading = false
+    @Published var isLoadingUsage = false
+    @Published var errorMessage: String?
+    @Published var copiedMessage: String?
 
-    @Published var rewritesToday: Int = 0
-    @Published var totalRewrites: Int = 0
-    @Published var freeLimit: Int = 3
-    @Published var isPro: Bool = false
+    @Published var rewritesToday = 0
+    @Published var totalRewrites = 0
+    @Published var freeLimit = 3
+    @Published var isPro = false
 
     @Published private(set) var lastSubmittedMessage: String = ""
-    @Published private(set) var hasEditedSinceLastRewrite: Bool = false
+    @Published private(set) var hasEditedSinceLastRewrite = false
 
-    private let rewriteService = RewriteService.shared
-    private let usageService = UsageService.shared
+    private let rewriteService: RewriteService
+    private let usageService: UsageService
+
+    init(
+        rewriteService: RewriteService,
+        usageService: UsageService
+    ) {
+        self.rewriteService = rewriteService
+        self.usageService = usageService
+    }
+
+    convenience init() {
+        self.init(
+            rewriteService: .shared,
+            usageService: .shared
+        )
+    }
+
+    // MARK: - Computed
 
     var canRewrite: Bool {
-        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !trimmed.isEmpty && trimmed.count <= 2000 && !isLoading && !freeLimitReached
+        let trimmed = normalized(message)
+        return !trimmed.isEmpty &&
+               trimmed.count <= 2000 &&
+               !isLoading &&
+               !freeLimitReached
     }
 
     var characterCountText: String {
@@ -50,14 +70,17 @@ final class RewriteViewModel: ObservableObject {
         isPro ? selectedTone.title : "Default"
     }
 
+    // MARK: - Setup
+
     func configureCurrentUser(isPro: Bool) {
         self.isPro = isPro
 
         if !isPro {
-            selectedRecipient = .partner
-            selectedTone = .soft
+            resetToFreeDefaults()
         }
     }
+
+    // MARK: - Usage
 
     func loadUsage() async {
         isLoadingUsage = true
@@ -68,12 +91,14 @@ final class RewriteViewModel: ObservableObject {
             rewritesToday = stats.today
             totalRewrites = stats.total
         } catch {
-            // silent on purpose so the rewrite screen still works
+            // intentionally silent
         }
     }
 
+    // MARK: - Rewrite
+
     func rewrite() async {
-        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = normalized(message)
 
         guard !trimmed.isEmpty else {
             errorMessage = "Message is required."
@@ -97,40 +122,51 @@ final class RewriteViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            let recipientToUse: RewriteRecipient = isPro ? selectedRecipient : .partner
-            let toneToUse: RewriteTone = isPro ? selectedTone : .soft
+            let recipient = isPro ? selectedRecipient : .partner
+            let tone = isPro ? selectedTone : .soft
 
             let response = try await rewriteService.rewrite(
                 message: trimmed,
-                recipient: recipientToUse,
-                tone: toneToUse
+                recipient: recipient,
+                tone: tone
             )
 
-            result = response
-            lastSubmittedMessage = trimmed
-            hasEditedSinceLastRewrite = false
+            applyRewriteResponse(response, originalMessage: trimmed)
 
-            isPro = response.isPro
-            rewritesToday = response.rewritesToday ?? rewritesToday
-            freeLimit = response.freeLimit
+            // refresh usage (non-blocking fallback safe)
+            await refreshUsageAfterRewrite()
 
-            if !isPro {
-                selectedRecipient = .partner
-                selectedTone = .soft
-            }
-
-            do {
-                let stats = try await usageService.fetchUsageStats()
-                rewritesToday = stats.today
-                totalRewrites = stats.total
-            } catch {
-                totalRewrites += 1
-            }
         } catch {
             result = nil
             errorMessage = error.localizedDescription
         }
     }
+
+    private func applyRewriteResponse(_ response: RewriteResponse, originalMessage: String) {
+        result = response
+        lastSubmittedMessage = originalMessage
+        hasEditedSinceLastRewrite = false
+
+        isPro = response.isPro
+        rewritesToday = response.rewritesToday ?? rewritesToday
+        freeLimit = response.freeLimit
+
+        if !isPro {
+            resetToFreeDefaults()
+        }
+    }
+
+    private func refreshUsageAfterRewrite() async {
+        do {
+            let stats = try await usageService.fetchUsageStats()
+            rewritesToday = stats.today
+            totalRewrites = stats.total
+        } catch {
+            totalRewrites += 1 // safe fallback
+        }
+    }
+
+    // MARK: - Display
 
     func displayedRewrite() -> String? {
         guard let result else { return nil }
@@ -145,37 +181,27 @@ final class RewriteViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Drafts
+
     func loadDraft(_ draft: Draft) {
-        message = draft.original ?? ""
+        let original = draft.original ?? ""
+
+        message = original
         errorMessage = nil
         copiedMessage = nil
 
-        let savedTone = (draft.tone ?? "soft").lowercased()
-        switch savedTone {
-        case "calm":
-            selectedTone = .calm
-        case "clear":
-            selectedTone = .clear
-        default:
-            selectedTone = .soft
+        if isPro {
+            selectedTone = toneFromString(draft.tone)
+        } else {
+            resetToFreeDefaults()
         }
-
-        if !isPro {
-            selectedRecipient = .partner
-            selectedTone = .soft
-        }
-
-        let originalText = draft.original ?? ""
-        let softText = nonEmpty(draft.softRewrite) ?? originalText
-        let calmText = nonEmpty(draft.calmRewrite) ?? originalText
-        let clearText = nonEmpty(draft.clearRewrite) ?? originalText
 
         let currentDay = Self.currentPacificDayString()
 
         result = RewriteResponse(
-            soft: softText,
-            calm: calmText,
-            clear: clearText,
+            soft: nonEmpty(draft.softRewrite) ?? original,
+            calm: nonEmpty(draft.calmRewrite) ?? original,
+            clear: nonEmpty(draft.clearRewrite) ?? original,
             toneScore: 0,
             emotionPrediction: "Saved draft",
             isPro: isPro,
@@ -185,9 +211,11 @@ final class RewriteViewModel: ObservableObject {
             rewritesToday: rewritesToday
         )
 
-        lastSubmittedMessage = originalText
+        lastSubmittedMessage = original
         hasEditedSinceLastRewrite = false
     }
+
+    // MARK: - Actions
 
     func clearInputOnly() {
         message = ""
@@ -213,8 +241,7 @@ final class RewriteViewModel: ObservableObject {
         result = nil
         errorMessage = nil
         copiedMessage = nil
-        selectedRecipient = .partner
-        selectedTone = .soft
+        resetToFreeDefaults()
         lastSubmittedMessage = ""
         hasEditedSinceLastRewrite = false
     }
@@ -223,9 +250,24 @@ final class RewriteViewModel: ObservableObject {
         copiedMessage = label
     }
 
+    // MARK: - Helpers
+
+    private func resetToFreeDefaults() {
+        selectedRecipient = .partner
+        selectedTone = .soft
+    }
+
+    private func toneFromString(_ tone: String?) -> RewriteTone {
+        switch tone?.lowercased() {
+        case "calm": return .calm
+        case "clear": return .clear
+        default: return .soft
+        }
+    }
+
     private func nonEmpty(_ value: String?) -> String? {
         guard let value else { return nil }
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = normalized(value)
         return trimmed.isEmpty ? nil : value
     }
 

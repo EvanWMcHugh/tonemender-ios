@@ -4,9 +4,15 @@ import Foundation
 final class DraftService {
     static let shared = DraftService()
 
-    private let apiClient = APIClient.shared
+    private let apiClient: APIClient
 
-    private init() {}
+    private init(apiClient: APIClient) {
+        self.apiClient = apiClient
+    }
+
+    private convenience init() {
+        self.init(apiClient: APIClient.shared)
+    }
 
     func fetchDrafts() async throws -> [Draft] {
         let response = try await apiClient.get(
@@ -24,11 +30,11 @@ final class DraftService {
         clearRewrite: String?
     ) async throws -> Draft {
         let request = SaveDraftRequest(
-            original: original.trimmingCharacters(in: .whitespacesAndNewlines),
-            tone: tone,
-            softRewrite: softRewrite,
-            calmRewrite: calmRewrite,
-            clearRewrite: clearRewrite
+            original: normalized(original),
+            tone: normalizedOptional(tone),
+            softRewrite: normalizedOptional(softRewrite),
+            calmRewrite: normalizedOptional(calmRewrite),
+            clearRewrite: normalizedOptional(clearRewrite)
         )
 
         let response = try await apiClient.post(
@@ -48,7 +54,9 @@ final class DraftService {
     }
 
     func deleteDraft(draftId: String) async throws -> String {
-        let request = DeleteDraftRequest(draftId: draftId)
+        let normalizedDraftId = normalized(draftId)
+
+        let request = DeleteDraftRequest(draftId: normalizedDraftId)
 
         let response = try await apiClient.post(
             "/api/messages/delete",
@@ -79,5 +87,14 @@ final class DraftService {
             )
         }
     }
-}
 
+    private func normalized(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func normalizedOptional(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = normalized(value)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}

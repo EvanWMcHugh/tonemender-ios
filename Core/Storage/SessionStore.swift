@@ -3,34 +3,47 @@ import Foundation
 final class SessionStore {
     static let shared = SessionStore()
 
-    private let userDefaults = UserDefaults.standard
+    private let defaults: UserDefaults
 
     private enum Keys {
-        static let cachedEmail = "tm_cached_email"
-        static let cachedIsPro = "tm_cached_is_pro"
-        static let cachedPlanType = "tm_cached_plan_type"
-        static let cachedUserId = "tm_cached_user_id"
+        static let userId = "tm_user_id"
+        static let email = "tm_email"
+        static let isPro = "tm_is_pro"
+        static let planType = "tm_plan_type"
     }
 
-    private init() {}
+    private init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    // MARK: - Save
 
     func saveUser(_ user: TMUser) {
-        userDefaults.set(user.id, forKey: Keys.cachedUserId)
-        userDefaults.set(user.email, forKey: Keys.cachedEmail)
-        userDefaults.set(user.isPro, forKey: Keys.cachedIsPro)
-        userDefaults.set(user.planType, forKey: Keys.cachedPlanType)
+        defaults.set(user.id, forKey: Keys.userId)
+        defaults.set(user.email, forKey: Keys.email)
+        defaults.set(user.isPro, forKey: Keys.isPro)
+
+        if let planType = user.planType, !planType.isEmpty {
+            defaults.set(planType, forKey: Keys.planType)
+        } else {
+            defaults.removeObject(forKey: Keys.planType)
+        }
     }
+
+    // MARK: - Load
 
     func loadCachedUser() -> TMUser? {
         guard
-            let id = userDefaults.string(forKey: Keys.cachedUserId),
-            let email = userDefaults.string(forKey: Keys.cachedEmail)
+            let id = defaults.string(forKey: Keys.userId),
+            let email = defaults.string(forKey: Keys.email),
+            !id.isEmpty,
+            !email.isEmpty
         else {
             return nil
         }
 
-        let isPro = userDefaults.bool(forKey: Keys.cachedIsPro)
-        let planType = userDefaults.string(forKey: Keys.cachedPlanType)
+        let isPro = defaults.bool(forKey: Keys.isPro)
+        let planType = defaults.string(forKey: Keys.planType)
 
         return TMUser(
             id: id,
@@ -40,10 +53,24 @@ final class SessionStore {
         )
     }
 
+    // MARK: - Clear
+
     func clear() {
-        userDefaults.removeObject(forKey: Keys.cachedUserId)
-        userDefaults.removeObject(forKey: Keys.cachedEmail)
-        userDefaults.removeObject(forKey: Keys.cachedIsPro)
-        userDefaults.removeObject(forKey: Keys.cachedPlanType)
+        defaults.removeObject(forKey: Keys.userId)
+        defaults.removeObject(forKey: Keys.email)
+        defaults.removeObject(forKey: Keys.isPro)
+        defaults.removeObject(forKey: Keys.planType)
+    }
+
+    // MARK: - Debug
+
+    func debugDescription() -> String {
+        """
+        SessionStore:
+        userId: \(defaults.string(forKey: Keys.userId) ?? "nil")
+        email: \(defaults.string(forKey: Keys.email) ?? "nil")
+        isPro: \(defaults.bool(forKey: Keys.isPro))
+        planType: \(defaults.string(forKey: Keys.planType) ?? "nil")
+        """
     }
 }

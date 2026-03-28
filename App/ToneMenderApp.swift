@@ -1,10 +1,3 @@
-//
-//  ToneMenderApp.swift
-//  ToneMender
-//
-//  Created by Evan McHugh on 3/12/26.
-//
-
 import SwiftUI
 
 @main

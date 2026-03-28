@@ -5,9 +5,17 @@ import Combine
 final class DraftsViewModel: ObservableObject {
     @Published var drafts: [Draft] = []
     @Published var isLoading = false
-    @Published var errorMessage: String? = nil
+    @Published var errorMessage: String?
 
-    private let draftService = DraftService.shared
+    private let draftService: DraftService
+
+    init(draftService: DraftService) {
+        self.draftService = draftService
+    }
+
+    convenience init() {
+        self.init(draftService: .shared)
+    }
 
     func loadDrafts() async {
         isLoading = true
@@ -23,6 +31,8 @@ final class DraftsViewModel: ObservableObject {
     }
 
     func deleteDraft(_ draft: Draft) async {
+        errorMessage = nil
+
         do {
             let deletedId = try await draftService.deleteDraft(draftId: draft.id)
             drafts.removeAll { $0.id == deletedId }
@@ -32,6 +42,8 @@ final class DraftsViewModel: ObservableObject {
     }
 
     func deleteAllDrafts() async {
+        errorMessage = nil
+
         do {
             try await draftService.deleteAllDrafts()
             drafts = []

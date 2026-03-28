@@ -14,12 +14,15 @@ struct AppRouter: View {
             }
         }
         .task {
-            if appViewModel.currentUser == nil {
-                await appViewModel.restoreSession()
-            } else {
-                appViewModel.isLoading = false
-            }
+            await bootstrapSessionIfNeeded()
+        }
+    }
+
+    private func bootstrapSessionIfNeeded() async {
+        if appViewModel.currentUser == nil {
+            await appViewModel.restoreSession()
+        } else {
+            appViewModel.isLoading = false
         }
     }
 }
-

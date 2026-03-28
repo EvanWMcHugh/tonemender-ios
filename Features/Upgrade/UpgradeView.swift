@@ -18,12 +18,16 @@ struct UpgradeView: View {
             }
             .navigationTitle("Upgrade")
             .task {
-                if billingManager.monthlyPlan == nil && billingManager.yearlyPlan == nil {
-                    await billingManager.loadProducts()
-                } else {
-                    await billingManager.refreshSubscriptionStatus()
-                }
+                await loadBillingState()
             }
+        }
+    }
+
+    private func loadBillingState() async {
+        if billingManager.monthlyPlan == nil && billingManager.yearlyPlan == nil {
+            await billingManager.loadProducts()
+        } else {
+            await billingManager.refreshSubscriptionStatus()
         }
     }
 
@@ -119,12 +123,12 @@ struct UpgradeView: View {
 
     @ViewBuilder
     private var statusSection: some View {
-        if let errorMessage = billingManager.errorMessage {
+        if let errorMessage = billingManager.errorMessage, !errorMessage.isEmpty {
             Text(errorMessage)
                 .font(.footnote)
                 .foregroundStyle(.red)
-        } else if let success = billingManager.purchaseSuccessMessage {
-            Text(success)
+        } else if let successMessage = billingManager.purchaseSuccessMessage, !successMessage.isEmpty {
+            Text(successMessage)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -184,16 +188,23 @@ struct UpgradeView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(
-                billingManager.isPurchasing ||
-                billingManager.isLoadingProducts ||
-                (planType == .monthly && billingManager.monthlyPlan == nil) ||
-                (planType == .yearly && billingManager.yearlyPlan == nil)
-            )
+            .disabled(isPlanButtonDisabled(for: planType))
         }
         .padding()
         .background(Color(.systemGray6))
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
-}
 
+    private func isPlanButtonDisabled(for planType: BillingPlanType) -> Bool {
+        if billingManager.isPurchasing || billingManager.isLoadingProducts {
+            return true
+        }
+
+        switch planType {
+        case .monthly:
+            return billingManager.monthlyPlan == nil
+        case .yearly:
+            return billingManager.yearlyPlan == nil
+        }
+    }
+}

@@ -3,23 +3,41 @@ import Combine
 
 @MainActor
 final class AppViewModel: ObservableObject {
-    @Published var isLoading: Bool = true
-    @Published var isAuthenticated: Bool = false
-    @Published var currentUser: TMUser? = nil
-    @Published var authError: String? = nil
-    @Published var selectedDraftForRewrite: Draft? = nil
-    @Published var selectedTab: Int = 0
-    @Published var needsEmailVerification: Bool = false
-    @Published var resendMessage: String? = nil
-    @Published var isResendingVerification: Bool = false
+    @Published var isLoading = true
+    @Published var isAuthenticated = false
+    @Published var currentUser: TMUser?
+    @Published var authError: String?
+    @Published var selectedDraftForRewrite: Draft?
+    @Published var selectedTab = 0
+    @Published var needsEmailVerification = false
+    @Published var resendMessage: String?
+    @Published var isResendingVerification = false
 
-    private let sessionStore = SessionStore.shared
-    private let authService = AuthService.shared
-    private let appAttestService = AppAttestService.shared
+    private let sessionStore: SessionStore
+    private let authService: AuthService
+    private let appAttestService: AppAttestService
 
-    init() {
-        currentUser = sessionStore.loadCachedUser()
-        isAuthenticated = currentUser != nil
+    init(
+        sessionStore: SessionStore,
+        authService: AuthService,
+        appAttestService: AppAttestService
+    ) {
+        self.sessionStore = sessionStore
+        self.authService = authService
+        self.appAttestService = appAttestService
+
+        let cachedUser = sessionStore.loadCachedUser()
+        currentUser = cachedUser
+        isAuthenticated = cachedUser != nil
+        isLoading = false
+    }
+
+    convenience init() {
+        self.init(
+            sessionStore: .shared,
+            authService: .shared,
+            appAttestService: .shared
+        )
     }
 
     func openDraftInRewrite(_ draft: Draft) {
@@ -27,40 +45,41 @@ final class AppViewModel: ObservableObject {
         selectedTab = 0
     }
 
+    func clearSelectedDraft() {
+        selectedDraftForRewrite = nil
+    }
+
     func restoreSession() async {
         isLoading = true
-        authError = nil
+        clearAuthUIState()
+
+        defer { isLoading = false }
 
         do {
             if appAttestService.isSupported {
-                try? await appAttestService.ensureAttestedIfNeeded()
+                try await appAttestService.ensureAttestedIfNeeded()
             }
 
             let user = try await authService.restoreSession()
 
-            if let user {
-                currentUser = user
-                isAuthenticated = true
-                sessionStore.saveUser(user)
-            } else {
-                currentUser = nil
-                isAuthenticated = false
-                sessionStore.clear()
+            guard let user else {
+                applySignedOutState(clearDraftSelection: false)
+                return
             }
-        } catch {
-            currentUser = nil
-            isAuthenticated = false
-            sessionStore.clear()
-        }
 
-        isLoading = false
+            currentUser = user
+            isAuthenticated = true
+            sessionStore.saveUser(user)
+        } catch {
+            applySignedOutState(clearDraftSelection: false)
+        }
     }
 
     func signIn(email: String, password: String) async {
-        authError = nil
-        needsEmailVerification = false
-        resendMessage = nil
         isLoading = true
+        clearAuthUIState()
+
+        defer { isLoading = false }
 
         do {
             let user = try await authService.signIn(email: email, password: password)
@@ -73,20 +92,18 @@ final class AppViewModel: ObservableObject {
             authError = message
             currentUser = nil
             isAuthenticated = false
+            sessionStore.clear()
 
-            if message.lowercased().contains("not confirmed") ||
-                message.lowercased().contains("not verified") {
+            if isEmailVerificationError(message) {
                 needsEmailVerification = true
             }
         }
-
-        isLoading = false
     }
 
     func resendVerification(email: String) async {
-        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedEmail = normalizeEmail(email)
 
-        guard !trimmedEmail.isEmpty else {
+        guard !normalizedEmail.isEmpty else {
             authError = "Enter your email first."
             return
         }
@@ -95,19 +112,21 @@ final class AppViewModel: ObservableObject {
         resendMessage = nil
         authError = nil
 
+        defer { isResendingVerification = false }
+
         do {
-            let message = try await authService.resendEmailVerification(email: trimmedEmail)
+            let message = try await authService.resendEmailVerification(email: normalizedEmail)
             resendMessage = message
         } catch {
             authError = error.localizedDescription
         }
-
-        isResendingVerification = false
     }
 
     func signUp(email: String, password: String) async -> String? {
-        authError = nil
         isLoading = true
+        authError = nil
+        resendMessage = nil
+        needsEmailVerification = false
 
         defer { isLoading = false }
 
@@ -122,14 +141,42 @@ final class AppViewModel: ObservableObject {
 
     func signOut() async {
         isLoading = true
+
+        defer { isLoading = false }
+
         await authService.signOut()
-        currentUser = nil
-        isAuthenticated = false
+        applySignedOutState(clearDraftSelection: true)
+    }
+
+    private func clearAuthUIState() {
         authError = nil
         needsEmailVerification = false
         resendMessage = nil
         isResendingVerification = false
+    }
+
+    private func applySignedOutState(clearDraftSelection: Bool) {
+        currentUser = nil
+        isAuthenticated = false
+        clearAuthUIState()
         sessionStore.clear()
-        isLoading = false
+
+        if clearDraftSelection {
+            selectedDraftForRewrite = nil
+        }
+    }
+
+    private func isEmailVerificationError(_ message: String) -> Bool {
+        let lowercased = message.lowercased()
+        return lowercased.contains("not confirmed")
+            || lowercased.contains("not verified")
+            || lowercased.contains("verify your email")
+            || lowercased.contains("email verification")
+    }
+
+    private func normalizeEmail(_ email: String) -> String {
+        email
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
     }
 }

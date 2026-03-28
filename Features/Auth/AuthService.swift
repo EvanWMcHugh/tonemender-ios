@@ -9,6 +9,7 @@ struct ResendEmailVerificationRequest: Encodable {
 }
 
 struct BasicAuthMessageResponse: Decodable {
+    let ok: Bool?
     let success: Bool?
     let message: String?
     let error: String?
@@ -18,9 +19,15 @@ struct BasicAuthMessageResponse: Decodable {
 final class AuthService {
     static let shared = AuthService()
 
-    private let apiClient = APIClient.shared
+    private let apiClient: APIClient
 
-    private init() {}
+    private init(apiClient: APIClient) {
+        self.apiClient = apiClient
+    }
+
+    private convenience init() {
+        self.init(apiClient: APIClient.shared)
+    }
 
     func restoreSession() async throws -> TMUser? {
         let response = try await apiClient.get(
@@ -31,8 +38,10 @@ final class AuthService {
     }
 
     func signIn(email: String, password: String) async throws -> TMUser {
+        let normalizedEmail = normalizeEmail(email)
+
         let request = SignInRequest(
-            email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+            email: normalizedEmail,
             password: password
         )
 
@@ -53,8 +62,10 @@ final class AuthService {
     }
 
     func signUp(email: String, password: String) async throws -> AuthSuccessResponse {
+        let normalizedEmail = normalizeEmail(email)
+
         let request = SignUpRequest(
-            email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+            email: normalizedEmail,
             password: password
         )
 
@@ -67,7 +78,7 @@ final class AuthService {
 
     func resendEmailVerification(email: String) async throws -> String {
         let request = ResendEmailVerificationRequest(
-            email: email.trimmingCharacters(in: .whitespacesAndNewlines)
+            email: normalizeEmail(email)
         )
 
         let response = try await apiClient.protectedPost(
@@ -82,7 +93,7 @@ final class AuthService {
 
     func requestPasswordReset(email: String) async throws -> String {
         let request = PasswordResetRequest(
-            email: email.trimmingCharacters(in: .whitespacesAndNewlines)
+            email: normalizeEmail(email)
         )
 
         let response = try await apiClient.protectedPost(
@@ -91,13 +102,25 @@ final class AuthService {
             as: BasicAuthMessageResponse.self
         )
 
-        return response.message ?? "If that email exists, a reset link has been sent."
+        return response.message
+            ?? "If that email exists, a reset link has been sent."
     }
 
     func signOut() async {
-        _ = try? await apiClient.post(
-            "/api/auth/sign-out",
-            as: AuthSuccessResponse.self
-        )
+        do {
+            _ = try await apiClient.post(
+                "/api/auth/sign-out",
+                as: AuthSuccessResponse.self
+            )
+        } catch {
+            // Best-effort sign-out. Local app state should still clear even if
+            // the network request fails or the session has already expired.
+        }
+    }
+
+    private func normalizeEmail(_ email: String) -> String {
+        email
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
     }
 }
