@@ -300,11 +300,11 @@ final class APIClient {
     ) async throws -> [String: String] {
         let normalizedPath = normalizedAbsolutePath(path)
 
-        let challengeResponse = try await fetchAssertionChallenge()
-
         let appAttest = AppAttestService.shared
         let keyId = try await appAttest.ensureKeyId()
         try await appAttest.ensureAttestedIfNeeded()
+
+        let challengeResponse = try await fetchAssertionChallenge()
 
         let assertion = try await appAttest.generateAssertion(
             keyId: keyId,
