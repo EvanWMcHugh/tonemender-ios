@@ -160,8 +160,9 @@ struct SignUpView: View {
                         password: password
                     )
 
-                    if let message {
-                        resultMessage = message
+                    resultMessage = message
+
+                    if appViewModel.needsEmailVerification {
                         didCreateAccount = true
                     }
                 }

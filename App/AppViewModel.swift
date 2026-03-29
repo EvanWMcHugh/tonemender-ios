@@ -132,9 +132,13 @@ final class AppViewModel: ObservableObject {
 
         do {
             let response = try await authService.signUp(email: email, password: password)
+
+            needsEmailVerification = true
+
             return response.message ?? "Check your email to verify your account."
         } catch {
             authError = error.localizedDescription
+            needsEmailVerification = false
             return nil
         }
     }
