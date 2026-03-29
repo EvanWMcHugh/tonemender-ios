@@ -43,49 +43,33 @@ final class DraftService {
             as: SaveDraftResponse.self
         )
 
-        guard response.success == true, let draft = response.draft else {
-            throw APIError.server(
-                statusCode: 500,
-                message: response.error ?? "Failed to save draft."
-            )
+        if let draft = response.draft {
+            return draft
         }
 
-        return draft
+        throw APIError.server(
+            statusCode: 500,
+            message: response.error ?? "Failed to save draft."
+        )
     }
 
-    func deleteDraft(draftId: String) async throws -> String {
+    func deleteDraft(draftId: String) async throws {
         let normalizedDraftId = normalized(draftId)
 
         let request = DeleteDraftRequest(draftId: normalizedDraftId)
 
-        let response = try await apiClient.post(
+        _ = try await apiClient.post(
             "/api/messages/delete",
             body: request,
             as: DeleteDraftResponse.self
         )
-
-        guard response.success == true, let deletedId = response.deletedId else {
-            throw APIError.server(
-                statusCode: 500,
-                message: response.error ?? "Failed to delete draft."
-            )
-        }
-
-        return deletedId
     }
 
     func deleteAllDrafts() async throws {
-        let response = try await apiClient.post(
+        _ = try await apiClient.post(
             "/api/messages/delete-all",
             as: DeleteAllDraftsResponse.self
         )
-
-        guard response.success == true else {
-            throw APIError.server(
-                statusCode: 500,
-                message: response.error ?? "Failed to delete drafts."
-            )
-        }
     }
 
     private func normalized(_ value: String) -> String {

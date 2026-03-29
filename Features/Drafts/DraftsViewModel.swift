@@ -34,8 +34,8 @@ final class DraftsViewModel: ObservableObject {
         errorMessage = nil
 
         do {
-            let deletedId = try await draftService.deleteDraft(draftId: draft.id)
-            drafts.removeAll { $0.id == deletedId }
+            try await draftService.deleteDraft(draftId: draft.id)
+            drafts.removeAll { $0.id == draft.id }
         } catch {
             errorMessage = error.localizedDescription
         }

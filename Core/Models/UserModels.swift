@@ -5,13 +5,8 @@ struct TMUser: Codable, Equatable {
     let email: String
     let isPro: Bool
     let planType: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case email
-        case isPro = "is_pro"
-        case planType = "plan_type"
-    }
+    let isReviewer: Bool
+    let reviewerMode: String?
 
     var effectivePlanType: String {
         planType ?? (isPro ? "pro" : "free")

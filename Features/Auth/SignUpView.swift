@@ -2,12 +2,9 @@ import SwiftUI
 
 struct SignUpView: View {
     @EnvironmentObject private var appViewModel: AppViewModel
-    @Environment(\.dismiss) private var dismiss
 
     @State private var email = ""
     @State private var password = ""
-    @State private var resultMessage: String?
-    @State private var didCreateAccount = false
 
     private var normalizedEmail: String {
         email.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -28,24 +25,30 @@ struct SignUpView: View {
             .navigationTitle("Sign Up")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(didCreateAccount ? "Done" : "Close") {
-                        dismiss()
+                    Button(appViewModel.signUpDidCreateAccount ? "Done" : "Close") {
+                        appViewModel.resetSignUpFlow()
+                        appViewModel.showSignUp = false
                     }
                 }
+            }
+            .onAppear {
+                appViewModel.needsEmailVerification = false
+                appViewModel.authError = nil
+                appViewModel.resendMessage = nil
             }
         }
     }
 
     private var headerSection: some View {
         VStack(spacing: 8) {
-            Text(didCreateAccount ? "Check your email" : "Create account")
+            Text(appViewModel.signUpDidCreateAccount ? "Check your email" : "Create account")
                 .font(.title2)
                 .fontWeight(.bold)
 
             Text(
-                didCreateAccount
-                    ? "Verify your email to activate your account"
-                    : "Start using ToneMender"
+                appViewModel.signUpDidCreateAccount
+                ? "Check your email to confirm your account."
+                : "Start using ToneMender"
             )
             .foregroundStyle(.secondary)
         }
@@ -54,7 +57,7 @@ struct SignUpView: View {
     @ViewBuilder
     private var contentSection: some View {
         VStack(spacing: 14) {
-            if didCreateAccount {
+            if appViewModel.signUpDidCreateAccount {
                 postSignUpSection
             } else {
                 preSignUpSection
@@ -64,14 +67,16 @@ struct SignUpView: View {
 
     private var postSignUpSection: some View {
         VStack(spacing: 14) {
-            Text("We sent a confirmation link to \(normalizedEmail).")
+            Text("We sent a confirmation link to \(appViewModel.signUpEmail).")
                 .font(.footnote)
                 .multilineTextAlignment(.center)
 
-            Text("If you don’t see it, check your spam or junk folder.")
-                .foregroundStyle(.secondary)
-                .font(.footnote)
-                .multilineTextAlignment(.center)
+            if let message = appViewModel.signUpMessage {
+                Text(message)
+                    .foregroundStyle(.secondary)
+                    .font(.footnote)
+                    .multilineTextAlignment(.center)
+            }
 
             if let authError = appViewModel.authError, !authError.isEmpty {
                 Text(authError)
@@ -89,7 +94,7 @@ struct SignUpView: View {
 
             Button {
                 Task {
-                    await appViewModel.resendVerification(email: normalizedEmail)
+                    await appViewModel.resendVerification(email: appViewModel.signUpEmail)
                 }
             } label: {
                 if appViewModel.isResendingVerification {
@@ -97,7 +102,7 @@ struct SignUpView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
                 } else {
-                    Text("Resend verification email")
+                    Text("Resend email verification")
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
@@ -107,11 +112,12 @@ struct SignUpView: View {
             .disabled(
                 appViewModel.isLoading ||
                 appViewModel.isResendingVerification ||
-                normalizedEmail.isEmpty
+                appViewModel.signUpEmail.isEmpty
             )
 
             Button("Go to Sign In") {
-                dismiss()
+                appViewModel.resetSignUpFlow()
+                appViewModel.showSignUp = false
             }
             .padding(.top, 4)
         }
@@ -142,29 +148,15 @@ struct SignUpView: View {
                     .multilineTextAlignment(.center)
             }
 
-            if let resultMessage, !resultMessage.isEmpty {
-                Text(resultMessage)
-                    .foregroundStyle(.secondary)
-                    .font(.footnote)
-                    .multilineTextAlignment(.center)
-            }
-
             Button {
-                resultMessage = nil
                 appViewModel.authError = nil
                 appViewModel.resendMessage = nil
 
                 Task {
-                    let message = await appViewModel.signUp(
+                    _ = await appViewModel.signUp(
                         email: normalizedEmail,
                         password: password
                     )
-
-                    resultMessage = message
-
-                    if appViewModel.needsEmailVerification {
-                        didCreateAccount = true
-                    }
                 }
             } label: {
                 if appViewModel.isLoading {

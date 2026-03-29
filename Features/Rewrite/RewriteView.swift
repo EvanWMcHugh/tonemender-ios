@@ -11,6 +11,8 @@ struct RewriteView: View {
     @State private var shareItems: [Any] = []
     @State private var showShareSheet = false
 
+    @FocusState private var isInputFocused: Bool
+
     private var isProUser: Bool {
         viewModel.isPro
     }
@@ -63,6 +65,12 @@ struct RewriteView: View {
                 }
                 .padding(20)
             }
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    isInputFocused = false
+                }
+            )
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Rewrite")
             .task {
                 await configureAndLoad()
@@ -166,10 +174,19 @@ struct RewriteView: View {
                 .font(.headline)
 
             TextEditor(text: $viewModel.message)
+                .focused($isInputFocused)
                 .frame(minHeight: 160)
                 .padding(10)
                 .background(Color(.systemGray6))
                 .clipShape(RoundedRectangle(cornerRadius: 14))
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") {
+                            isInputFocused = false
+                        }
+                    }
+                }
 
             HStack {
                 Spacer()
@@ -235,6 +252,8 @@ struct RewriteView: View {
     private var actionSection: some View {
         VStack(spacing: 12) {
             Button {
+                isInputFocused = false
+
                 Task {
                     draftSaveMessage = nil
                     await viewModel.rewrite()
@@ -255,6 +274,7 @@ struct RewriteView: View {
             .disabled(!viewModel.canRewrite)
 
             Button("Clear") {
+                isInputFocused = false
                 draftSaveMessage = nil
                 viewModel.clearInputOnly()
             }

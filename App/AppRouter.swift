@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AppRouter: View {
     @EnvironmentObject private var appViewModel: AppViewModel
+    @State private var didBootstrap = false
 
     var body: some View {
         Group {
@@ -14,6 +15,8 @@ struct AppRouter: View {
             }
         }
         .task {
+            guard !didBootstrap else { return }
+            didBootstrap = true
             await bootstrapSessionIfNeeded()
         }
     }

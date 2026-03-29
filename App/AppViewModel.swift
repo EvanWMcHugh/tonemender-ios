@@ -12,6 +12,10 @@ final class AppViewModel: ObservableObject {
     @Published var needsEmailVerification = false
     @Published var resendMessage: String?
     @Published var isResendingVerification = false
+    @Published var showSignUp = false
+    @Published var signUpDidCreateAccount = false
+    @Published var signUpEmail = ""
+    @Published var signUpMessage: String?
 
     private let sessionStore: SessionStore
     private let authService: AuthService
@@ -122,7 +126,7 @@ final class AppViewModel: ObservableObject {
         }
     }
 
-    func signUp(email: String, password: String) async -> String? {
+    func signUp(email: String, password: String) async -> Bool {
         isLoading = true
         authError = nil
         resendMessage = nil
@@ -131,18 +135,27 @@ final class AppViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            let response = try await authService.signUp(email: email, password: password)
+            _ = try await authService.signUp(email: email, password: password)
 
-            needsEmailVerification = true
+            signUpEmail = normalizeEmail(email)
+            signUpMessage = "Check your email to confirm your account. If you don’t see it, check your spam or junk folder, then tap Resend email verification."
+            signUpDidCreateAccount = true
 
-            return response.message ?? "Check your email to verify your account."
+            return true
         } catch {
             authError = error.localizedDescription
             needsEmailVerification = false
-            return nil
+            signUpDidCreateAccount = false
+            return false
         }
     }
-
+    
+    func resetSignUpFlow() {
+        signUpDidCreateAccount = false
+        signUpEmail = ""
+        signUpMessage = nil
+    }
+    
     func signOut() async {
         isLoading = true
 

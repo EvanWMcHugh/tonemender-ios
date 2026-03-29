@@ -21,11 +21,18 @@ struct Draft: Codable, Identifiable {
 
     var createdAtDate: Date? {
         Self.isoFormatter.date(from: createdAt)
+            ?? Self.fallbackIsoFormatter.date(from: createdAt)
     }
 
     private static let isoFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let fallbackIsoFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
         return formatter
     }()
 }
@@ -37,18 +44,48 @@ struct DraftListResponse: Codable {
 }
 
 struct SaveDraftResponse: Codable {
+    let ok: Bool?
     let success: Bool?
     let draft: Draft?
     let error: String?
 }
 
 struct DeleteDraftResponse: Codable {
+    let ok: Bool?
     let success: Bool?
     let deletedId: String?
     let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case ok
+        case success
+        case deletedId = "deletedId"
+        case error
+    }
+
+    init(ok: Bool?, success: Bool?, deletedId: String?, error: String?) {
+        self.ok = ok
+        self.success = success
+        self.deletedId = deletedId
+        self.error = error
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DynamicCodingKeys.self)
+
+        let ok = try container.decodeIfPresent(Bool.self, forKey: DynamicCodingKeys("ok"))
+        let success = try container.decodeIfPresent(Bool.self, forKey: DynamicCodingKeys("success"))
+        let deletedId =
+            try container.decodeIfPresent(String.self, forKey: DynamicCodingKeys("deletedId")) ??
+            container.decodeIfPresent(String.self, forKey: DynamicCodingKeys("deleted_id"))
+        let error = try container.decodeIfPresent(String.self, forKey: DynamicCodingKeys("error"))
+
+        self.init(ok: ok, success: success, deletedId: deletedId, error: error)
+    }
 }
 
 struct DeleteAllDraftsResponse: Codable {
+    let ok: Bool?
     let success: Bool?
     let error: String?
 }
@@ -73,4 +110,30 @@ struct SaveDraftRequest: Codable {
 
 struct DeleteDraftRequest: Codable {
     let draftId: String
+
+    enum CodingKeys: String, CodingKey {
+        case draftId = "draftId"
+    }
+}
+
+// MARK: - Helpers
+
+private struct DynamicCodingKeys: CodingKey {
+    var stringValue: String
+    var intValue: Int?
+
+    init(_ string: String) {
+        self.stringValue = string
+        self.intValue = nil
+    }
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+        self.intValue = nil
+    }
+
+    init?(intValue: Int) {
+        self.stringValue = "\(intValue)"
+        self.intValue = intValue
+    }
 }

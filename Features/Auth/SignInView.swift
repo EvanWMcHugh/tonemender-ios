@@ -5,7 +5,6 @@ struct SignInView: View {
 
     @State private var email = ""
     @State private var password = ""
-    @State private var showSignUp = false
     @State private var showForgotPassword = false
 
     private var normalizedEmail: String {
@@ -27,7 +26,7 @@ struct SignInView: View {
                 Spacer()
             }
             .padding(24)
-            .sheet(isPresented: $showSignUp) {
+            .sheet(isPresented: $appViewModel.showSignUp) {
                 SignUpView()
                     .environmentObject(appViewModel)
             }
@@ -36,8 +35,6 @@ struct SignInView: View {
             }
         }
     }
-
-    // MARK: - Sections
 
     private var headerSection: some View {
         VStack(spacing: 8) {
@@ -181,7 +178,7 @@ struct SignInView: View {
 
     private var createAccountButton: some View {
         Button("Create account") {
-            showSignUp = true
+            appViewModel.showSignUp = true
         }
         .padding(.top, 4)
     }
