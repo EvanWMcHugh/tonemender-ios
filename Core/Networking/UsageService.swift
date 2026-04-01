@@ -23,6 +23,13 @@ final class UsageService {
         self.init(apiClient: APIClient.shared)
     }
 
+    func fetchUsage() async throws -> UsageResponse {
+        try await apiClient.get(
+            "/api/usage",
+            as: UsageResponse.self
+        )
+    }
+
     func fetchUsageStats() async throws -> UsageStats {
         let response = try await apiClient.get(
             "/api/usage/stats",

@@ -17,18 +17,6 @@ struct RewriteView: View {
         viewModel.isPro
     }
 
-    private var rewritesToday: Int {
-        viewModel.rewritesToday
-    }
-
-    private var freeLimit: Int {
-        viewModel.freeLimit
-    }
-
-    private var remainingFreeRewrites: Int {
-        viewModel.remainingFreeRewrites
-    }
-
     private var freeLimitReached: Bool {
         viewModel.freeLimitReached
     }
@@ -138,9 +126,11 @@ struct RewriteView: View {
                 ProgressView()
             }
 
-            Text("You have \(remainingFreeRewrites) of \(freeLimit) free rewrites left today.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            if let rewritesLeft = viewModel.rewritesLeft {
+                Text(freeText(for: rewritesLeft))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
 
             if freeLimitReached {
                 Text("You’ve used all free rewrites for today. Upgrade to Pro for unlimited rewrites.")
@@ -432,7 +422,18 @@ struct RewriteView: View {
             }
         }
     }
-
+    
+    private func freeText(for rewritesLeft: Int) -> String {
+        switch rewritesLeft {
+        case 0:
+            return "No free rewrites left today"
+        case 1:
+            return "⚠️ 1 free rewrite left today"
+        default:
+            return "\(rewritesLeft) free rewrites left today"
+        }
+    }
+    
     @ViewBuilder
     private var statsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -442,15 +443,11 @@ struct RewriteView: View {
             if isProUser {
                 Text("Pro account • Unlimited rewrites")
                     .foregroundStyle(.secondary)
-
-                Text("Total rewrites: \(viewModel.totalRewrites)")
-                    .foregroundStyle(.secondary)
             } else {
-                Text("Free rewrites today: \(rewritesToday)/\(freeLimit)")
-                    .foregroundStyle(.secondary)
-
-                Text("Total rewrites: \(viewModel.totalRewrites)")
-                    .foregroundStyle(.secondary)
+                if let rewritesLeft = viewModel.rewritesLeft {
+                    Text(freeText(for: rewritesLeft))
+                        .foregroundStyle(.secondary)
+                }
 
                 if freeLimitReached {
                     Text("Upgrade to Pro for unlimited rewrites.")

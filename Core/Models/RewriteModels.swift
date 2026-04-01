@@ -49,8 +49,7 @@ struct RewriteResponse: Codable {
     let isPro: Bool
     let planType: String?
     let day: String
-    let freeLimit: Int
-    let rewritesToday: Int?
+    let rewritesLeft: Int?
 
     enum CodingKeys: String, CodingKey {
         case soft
@@ -61,11 +60,8 @@ struct RewriteResponse: Codable {
         case isPro = "is_pro"
         case planType = "plan_type"
         case day
-        case freeLimit = "free_limit"
-        case rewritesToday = "rewrites_today"
+        case rewritesLeft = "rewrites_left"
     }
-
-    // MARK: - Helpers
 
     var safeSoft: String {
         normalize(soft)
@@ -86,5 +82,13 @@ struct RewriteResponse: Codable {
     private func normalize(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? value : trimmed
+    }
+}
+
+struct UsageResponse: Codable {
+    let rewritesLeft: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case rewritesLeft = "rewrites_left"
     }
 }

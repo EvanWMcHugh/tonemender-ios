@@ -18,9 +18,7 @@ final class RewriteViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var copiedMessage: String?
 
-    @Published var rewritesToday = 0
-    @Published var totalRewrites = 0
-    @Published var freeLimit = 3
+    @Published var rewritesLeft: Int?
     @Published var isPro = false
 
     @Published private(set) var lastSubmittedMessage: String = ""
@@ -58,12 +56,8 @@ final class RewriteViewModel: ObservableObject {
         "\(message.count)/2000"
     }
 
-    var remainingFreeRewrites: Int {
-        max(0, freeLimit - rewritesToday)
-    }
-
     var freeLimitReached: Bool {
-        !isPro && remainingFreeRewrites == 0
+        !isPro && (rewritesLeft ?? 0) <= 0
     }
 
     var currentResultLabel: String {
@@ -83,13 +77,14 @@ final class RewriteViewModel: ObservableObject {
     // MARK: - Usage
 
     func loadUsage() async {
+        guard !isPro else { return }
+
         isLoadingUsage = true
         defer { isLoadingUsage = false }
 
         do {
-            let stats = try await usageService.fetchUsageStats()
-            rewritesToday = stats.today
-            totalRewrites = stats.total
+            let usage = try await usageService.fetchUsage()
+            rewritesLeft = usage.rewritesLeft
         } catch {
             // intentionally silent
         }
@@ -132,10 +127,6 @@ final class RewriteViewModel: ObservableObject {
             )
 
             applyRewriteResponse(response, originalMessage: trimmed)
-
-            // refresh usage (non-blocking fallback safe)
-            await refreshUsageAfterRewrite()
-
         } catch {
             result = nil
             errorMessage = error.localizedDescription
@@ -148,22 +139,12 @@ final class RewriteViewModel: ObservableObject {
         hasEditedSinceLastRewrite = false
 
         isPro = response.isPro
-        rewritesToday = response.rewritesToday ?? rewritesToday
-        freeLimit = response.freeLimit
 
         if !isPro {
             resetToFreeDefaults()
         }
-    }
 
-    private func refreshUsageAfterRewrite() async {
-        do {
-            let stats = try await usageService.fetchUsageStats()
-            rewritesToday = stats.today
-            totalRewrites = stats.total
-        } catch {
-            totalRewrites += 1 // safe fallback
-        }
+        rewritesLeft = response.rewritesLeft
     }
 
     // MARK: - Display
@@ -196,8 +177,6 @@ final class RewriteViewModel: ObservableObject {
             resetToFreeDefaults()
         }
 
-        let currentDay = Self.currentPacificDayString()
-
         result = RewriteResponse(
             soft: nonEmpty(draft.softRewrite) ?? original,
             calm: nonEmpty(draft.calmRewrite) ?? original,
@@ -206,9 +185,8 @@ final class RewriteViewModel: ObservableObject {
             emotionPrediction: "Saved draft",
             isPro: isPro,
             planType: isPro ? "pro" : "free",
-            day: currentDay,
-            freeLimit: freeLimit,
-            rewritesToday: rewritesToday
+            day: Self.currentPacificDayString(),
+            rewritesLeft: rewritesLeft
         )
 
         lastSubmittedMessage = original
