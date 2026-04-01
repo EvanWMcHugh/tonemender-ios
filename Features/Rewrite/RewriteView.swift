@@ -345,26 +345,26 @@ struct RewriteView: View {
                     after: displayed
                 )
 
-                if isProUser {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Tone score")
-                            .font(.headline)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Tone score")
+                        .font(.headline)
 
-                        Text("\(result.toneScore)/100")
-                            .font(.title3)
-                            .fontWeight(.bold)
-                    }
+                    Text("\(result.toneScore)/100")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Emotional impact")
-                            .font(.headline)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Emotional impact")
+                        .font(.headline)
 
-                        Text(result.emotionPrediction)
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-                    }
-                } else {
+                    Text(result.emotionPrediction)
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                }
+
+                if !isProUser {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Want more?")
                             .font(.headline)
