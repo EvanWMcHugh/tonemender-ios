@@ -6,8 +6,8 @@ import Combine
 final class BillingManager: ObservableObject {
     static let shared = BillingManager()
 
-    static let monthlyProductId = "com.tonemender.pro.monthly"
-    static let yearlyProductId = "com.tonemender.pro.yearly"
+    static let monthlyProductId = "com.tonemender.pro.monthly.v2"
+    static let yearlyProductId = "com.tonemender.pro.yearly.v2"
 
     @Published var isLoadingProducts = false
     @Published var isPurchasing = false

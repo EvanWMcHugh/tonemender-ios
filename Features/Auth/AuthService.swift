@@ -45,7 +45,7 @@ final class AuthService {
             password: password
         )
 
-        let response = try await apiClient.protectedPost(
+        let response = try await apiClient.post(
             "/api/auth/sign-in",
             body: request,
             as: AuthSuccessResponse.self

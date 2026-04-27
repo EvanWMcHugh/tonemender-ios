@@ -60,9 +60,6 @@ final class AppViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            if appAttestService.isSupported {
-                try await appAttestService.ensureAttestedIfNeeded()
-            }
 
             let user = try await authService.restoreSession()
 
