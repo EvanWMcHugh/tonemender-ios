@@ -45,11 +45,21 @@ final class AuthService {
             password: password
         )
 
-        let response = try await apiClient.post(
-            "/api/auth/sign-in",
-            body: request,
-            as: AuthSuccessResponse.self
-        )
+        let response: AuthSuccessResponse
+
+        if isReviewerEmail(normalizedEmail) {
+            response = try await apiClient.post(
+                "/api/auth/sign-in",
+                body: request,
+                as: AuthSuccessResponse.self
+            )
+        } else {
+            response = try await apiClient.protectedPost(
+                "/api/auth/sign-in",
+                body: request,
+                as: AuthSuccessResponse.self
+            )
+        }
 
         guard let user = response.user else {
             throw APIError.server(
@@ -59,6 +69,10 @@ final class AuthService {
         }
 
         return user
+    }
+
+    private func isReviewerEmail(_ email: String) -> Bool {
+        email == "free@tonemender.com" || email == "pro@tonemender.com"
     }
 
     func signUp(email: String, password: String) async throws -> AuthSuccessResponse {
