@@ -12,6 +12,7 @@ struct UpgradeView: View {
                     featuresSection
                     plansSection
                     restoreSection
+                    legalSection
                     statusSection
                 }
                 .padding(20)
@@ -118,6 +119,26 @@ struct UpgradeView: View {
             }
             .buttonStyle(.bordered)
             .disabled(billingManager.isPurchasing || billingManager.isLoadingProducts)
+        }
+    }
+    
+    private var legalSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Subscriptions renew automatically unless canceled at least 24 hours before the end of the current period.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Link(
+                "Privacy Policy",
+                destination: URL(string: "https://tonemender.com/privacy")!
+            )
+            .font(.footnote)
+
+            Link(
+                "Terms of Use",
+                destination: URL(string: "https://tonemender.com/terms")!
+            )
+            .font(.footnote)
         }
     }
 
