@@ -120,7 +120,6 @@ final class BillingManager: ObservableObject {
         purchaseSuccessMessage = nil
 
         do {
-            try await AppStore.sync()
             try await syncCurrentEntitlementsToBackend()
             await refreshSubscriptionStatus()
 
